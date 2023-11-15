@@ -34,6 +34,10 @@ import java.beans.PropertyChangeListener;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class CodeShellWidget extends EditorBasedWidget
         implements StatusBarWidget.Multiframe, StatusBarWidget.IconPresentation,
@@ -42,6 +46,15 @@ public class CodeShellWidget extends EditorBasedWidget
 
     public static final Key<String[]> SHELL_CODER_CODE_SUGGESTION = new Key<>("CodeShell Code Suggestion");
     public static final Key<Integer> SHELL_CODER_POSITION = new Key<>("CodeShell Position");
+    private final AtomicInteger randomKey = new AtomicInteger();
+
+    private int setRandomKey() {
+        int randomNumber;
+        do {
+            randomNumber = ThreadLocalRandom.current().nextInt(Integer.MAX_VALUE);
+        } while (!randomKey.compareAndSet(randomKey.get(), randomNumber));
+        return randomNumber;
+    }
 
     protected CodeShellWidget(@NotNull Project project) {
         super(project);
@@ -255,7 +268,14 @@ public class CodeShellWidget extends EditorBasedWidget
 
         CodeShellCompleteService codeShell = ApplicationManager.getApplication().getService(CodeShellCompleteService.class);
         CharSequence editorContents = focusedEditor.getDocument().getCharsSequence();
-        CompletableFuture<String[]> future = CompletableFuture.supplyAsync(() -> codeShell.getCodeCompletionHints(editorContents, currentPosition));
+        int randomKey = setRandomKey();
+        Executor delayedExecutor = CompletableFuture.delayedExecutor(3, TimeUnit.SECONDS);
+        CompletableFuture<String[]> future = CompletableFuture.supplyAsync(() -> {
+            if (randomKey != this.randomKey.get()) {
+                return null;
+            }
+            return codeShell.getCodeCompletionHints(editorContents, currentPosition);
+        }, delayedExecutor);
         future.thenAccept(hintList -> this.addCodeSuggestion(focusedEditor, file, currentPosition, hintList));
     }
 
